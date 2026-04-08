@@ -152,7 +152,7 @@ def fetch_blog_content(url: str) -> str:
         return f"[오류 발생: {str(e)}]"
 
 
-def generate_feedback(url: str, content: str, name: str, level: str, api_key: str) -> str:
+def generate_feedback(url: str, content: str, level: str, api_key: str) -> str:
     """Claude API로 피드백 생성"""
     client = anthropic.Anthropic(api_key=api_key)
 
@@ -165,7 +165,6 @@ def generate_feedback(url: str, content: str, name: str, level: str, api_key: st
     prompt = f"""
 아래 블로그를 리뷰하고 슬랙 DM 피드백을 작성해줘.
 
-수강생 이름: {name}
 수강생 레벨: {level_map.get(level, '자동 판단')}
 블로그 URL: {url}
 
@@ -173,6 +172,7 @@ def generate_feedback(url: str, content: str, name: str, level: str, api_key: st
 {content}
 
 시스템 프롬프트의 출력 포맷을 그대로 따라서 작성해줘.
+수강생 이름은 블로그 글쓴이 이름이나 닉네임에서 직접 파악해서 써줘.
 첫 줄 인사는 반드시 이 블로그 내용에서 느낀 진짜 인상을 한 줄로 써줘 — 형식적인 인사 금지.
 """
 
@@ -254,11 +254,6 @@ with col1:
         placeholder="https://velog.io/@...",
         help="velog, tistory, medium 등 지원",
     )
-    student_name = st.text_input(
-        "수강생 이름 *",
-        placeholder="성균",
-        help="피드백 첫 줄 인사에 사용돼요",
-    )
     level = st.radio(
         "수강생 레벨",
         ["🤖 자동 판단", "🌱 입문", "🚀 중급"],
@@ -267,13 +262,13 @@ with col1:
 
     st.divider()
 
-    can_generate = bool(blog_url and student_name and claude_api_key)
+    can_generate = bool(blog_url and claude_api_key)
     generate_btn = st.button(
         "✨ 피드백 생성하기",
         type="primary",
         use_container_width=True,
         disabled=not can_generate,
-        help="" if can_generate else "URL, 이름, Claude API Key를 모두 입력해주세요",
+        help="" if can_generate else "URL을 입력하고 Claude API Key를 설정해주세요",
     )
 
     if not claude_api_key and not _secret_key:
@@ -291,11 +286,12 @@ with col2:
         progress = st.progress(0, text="블로그 읽는 중...")
         blog_content = fetch_blog_content(blog_url)
         progress.progress(40, text="Claude가 피드백 작성 중...")
-        feedback = generate_feedback(blog_url, blog_content, student_name, level, claude_api_key)
+        feedback = generate_feedback(blog_url, blog_content, level, claude_api_key)
         st.session_state.feedback_text = feedback
+        st.session_state.current_url = blog_url
         progress.progress(100, text="완료!")
         progress.empty()
-        st.success(f"✅ {student_name}님 피드백 생성 완료!")
+        st.success("✅ 피드백 생성 완료!")
 
     # 수정 가능한 텍스트 영역
     edited_feedback = st.text_area(
@@ -313,10 +309,11 @@ with col2:
             st.caption("위 텍스트를 전체 선택(Ctrl+A) 후 복사해서 슬랙에 붙여넣어 주세요")
 
         # 히스토리 저장
-        names_in_history = [h["name"] for h in st.session_state.history]
-        if student_name not in names_in_history:
+        short_url = blog_url.split("/")[-1][:20] if blog_url else "블로그"
+        urls_in_history = [h["url"] for h in st.session_state.history]
+        if blog_url not in urls_in_history:
             st.session_state.history.append({
-                "name": student_name,
+                "name": short_url,
                 "url": blog_url,
                 "level": level,
                 "date": datetime.now().strftime("%m/%d %H:%M"),
