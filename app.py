@@ -185,20 +185,32 @@ def generate_feedback(url: str, content: str, name: str, level: str, api_key: st
     return message.content[0].text
 
 
+# ── API 키: Secrets에서 자동 로드 ─────────────────────
+# Streamlit Cloud Secrets에 CLAUDE_API_KEY가 있으면 자동 사용
+# 없으면 사이드바 입력란 표시 (로컬 테스트용)
+_secret_key = ""
+try:
+    _secret_key = st.secrets.get("CLAUDE_API_KEY", "")
+except Exception:
+    pass
+
 # ── 사이드바 ───────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚙️ API 설정")
-
-    default_claude = st.secrets.get("CLAUDE_API_KEY", "") if hasattr(st, "secrets") else ""
-
-    claude_api_key = st.text_input(
-        "Claude API Key",
-        value=default_claude,
-        type="password",
-        placeholder="sk-ant-...",
-        help="Anthropic Console에서 발급",
-    )
-    st.caption("🔒 키는 이 세션에서만 사용되고 저장되지 않아요")
+    # Secrets에 키가 있으면 입력란 숨김 (팀원들에게 노출 안 됨)
+    if _secret_key:
+        claude_api_key = _secret_key
+        st.markdown("## 📚 히스토리")
+    else:
+        st.markdown("## ⚙️ API 설정")
+        claude_api_key = st.text_input(
+            "Claude API Key",
+            type="password",
+            placeholder="sk-ant-...",
+            help="Anthropic Console에서 발급 — Secrets 설정 후 이 칸은 사라져요",
+        )
+        st.caption("🔒 키는 이 세션에서만 사용되고 저장되지 않아요")
+        st.divider()
+        st.markdown("## 📚 히스토리")
 
     st.divider()
 
@@ -264,7 +276,7 @@ with col1:
         help="" if can_generate else "URL, 이름, Claude API Key를 모두 입력해주세요",
     )
 
-    if not claude_api_key:
+    if not claude_api_key and not _secret_key:
         st.warning("⬅️ 사이드바에 Claude API Key를 먼저 입력해주세요")
 
 # ── 우측: 피드백 프리뷰 ────────────────────────────────
