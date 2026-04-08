@@ -152,20 +152,14 @@ def fetch_blog_content(url: str) -> str:
         return f"[오류 발생: {str(e)}]"
 
 
-def generate_feedback(url: str, content: str, level: str, api_key: str) -> str:
+def generate_feedback(url: str, content: str, api_key: str) -> str:
     """Claude API로 피드백 생성"""
     client = anthropic.Anthropic(api_key=api_key)
-
-    level_map = {
-        "🤖 자동 판단": "블로그 내용을 보고 직접 레벨을 판단해줘",
-        "🌱 입문": "입문 레벨 — 입문자 포맷(격려형→직접형) 사용",
-        "🚀 중급": "중급 레벨 — 중급자 포맷(직접형→격려형) 사용",
-    }
 
     prompt = f"""
 아래 블로그를 리뷰하고 슬랙 DM 피드백을 작성해줘.
 
-수강생 레벨: {level_map.get(level, '자동 판단')}
+수강생 레벨: 블로그 내용을 보고 직접 레벨을 판단해줘 (입문/중급 기준은 시스템 프롬프트 참고)
 블로그 URL: {url}
 
 블로그 내용:
@@ -254,11 +248,6 @@ with col1:
         placeholder="https://velog.io/@...",
         help="velog, tistory, medium 등 지원",
     )
-    level = st.radio(
-        "수강생 레벨",
-        ["🤖 자동 판단", "🌱 입문", "🚀 중급"],
-        help="모르면 자동 판단 — Claude가 블로그 보고 결정해요",
-    )
 
     st.divider()
 
@@ -286,7 +275,7 @@ with col2:
         progress = st.progress(0, text="블로그 읽는 중...")
         blog_content = fetch_blog_content(blog_url)
         progress.progress(40, text="Claude가 피드백 작성 중...")
-        feedback = generate_feedback(blog_url, blog_content, level, claude_api_key)
+        feedback = generate_feedback(blog_url, blog_content, claude_api_key)
         st.session_state.feedback_text = feedback
         st.session_state.current_url = blog_url
         progress.progress(100, text="완료!")
@@ -315,6 +304,6 @@ with col2:
             st.session_state.history.append({
                 "name": short_url,
                 "url": blog_url,
-                "level": level,
+                "level": "🤖 자동 판단",
                 "date": datetime.now().strftime("%m/%d %H:%M"),
             })
