@@ -340,7 +340,8 @@ def fetch_blog_content(url: str) -> str:
         return f"[오류: {e}]"
 
 
-def generate_feedback(url: str, content: str, api_key: str) -> str:
+def stream_feedback(url: str, content: str, api_key: str):
+    """Claude 스트리밍 — 글자가 실시간으로 나타남"""
     client = anthropic.Anthropic(api_key=api_key)
     prompt = f"""
 아래 블로그를 리뷰하고 슬랙 DM 피드백을 작성해줘.
@@ -355,13 +356,14 @@ def generate_feedback(url: str, content: str, api_key: str) -> str:
 수강생 이름은 블로그 글쓴이 이름이나 닉네임에서 직접 파악해서 써줘.
 첫 줄 인사는 반드시 이 블로그 내용에서 느낀 진짜 인상을 한 줄로 써줘 — 형식적인 인사 금지.
 """
-    msg = client.messages.create(
+    with client.messages.stream(
         model="claude-sonnet-4-6",
         max_tokens=4000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
-    )
-    return msg.content[0].text
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
 
 
 # ── API 키 로드 ────────────────────────────────────────
@@ -454,16 +456,16 @@ with col1:
 with col2:
     st.subheader("📤 피드백 프리뷰")
 
-    # 생성 실행
+    # 생성 실행 — 스트리밍
     if generate_btn and can_generate:
-        progress = st.progress(0, text="블로그 읽는 중...")
-        blog_content = fetch_blog_content(blog_url)
-        progress.progress(40, text="Claude가 피드백 작성 중...")
-        feedback = generate_feedback(blog_url, blog_content, claude_api_key)
+        with st.spinner("블로그 읽는 중..."):
+            blog_content = fetch_blog_content(blog_url)
+
+        # 글자가 실시간으로 타이핑되며 나타남
+        feedback = st.write_stream(
+            stream_feedback(blog_url, blog_content, claude_api_key)
+        )
         st.session_state.feedback_text = feedback
-        progress.progress(100, text="완료!")
-        progress.empty()
-        st.success("✅ 피드백 생성 완료!")
 
         # 히스토리 저장
         short_url = blog_url.split("/")[-1][:25] if blog_url else "블로그"
@@ -474,8 +476,10 @@ with col2:
                 "url": blog_url,
                 "date": datetime.now().strftime("%m/%d %H:%M"),
             })
+        # 스트리밍 완료 후 편집 가능한 텍스트 영역으로 전환
+        st.rerun()
 
-    # 피드백 텍스트 영역
+    # 피드백 텍스트 영역 (스트리밍 완료 후)
     edited_feedback = st.text_area(
         "피드백",
         value=st.session_state.feedback_text,
